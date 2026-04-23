@@ -40,7 +40,6 @@ type BigUnion = MessageKeys<Messages, NestedKeyOf<Messages>>;
 
 declare const key1: BigUnion;
 declare const key2: BigUnion;
-declare const key3: BigUnion;
 
 // tsgo: TS2590 here. tsc@6.0.2: clean.
-export const arr = [key1, key2, key3];
+export const arr = [key1, key2];

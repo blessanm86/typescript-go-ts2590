@@ -17,7 +17,7 @@ pnpm run tsgo   # exit 2 — TS2590 at repro.ts:44
 The error fires at:
 
 ```ts
-export const arr = [key1, key2, key3]; // three BigUnion values
+export const arr = [key1, key2]; // two BigUnion values is enough
 ```
 
 ## Versions
