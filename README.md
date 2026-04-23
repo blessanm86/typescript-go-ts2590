@@ -1,13 +1,13 @@
 # TS2590 repro — tsgo vs tsc@6.0.2
 
-`tsgo --noEmit` reports TS2590 on a `useMemo` call whose deps tuple contains three values of a large string-literal union. `tsc@6.0.2` accepts the same input.
+`tsgo --noEmit` reports TS2590 on a bare array literal containing three values of a large string-literal union. `tsc@6.0.2` accepts the same input.
 
 ## Reproduce
 
 ```bash
 pnpm install --ignore-workspace
 pnpm run tsc    # exit 0
-pnpm run tsgo   # exit 2 — TS2590 at repro.ts:96
+pnpm run tsgo   # exit 2 — TS2590 at repro.ts:44
 ```
 
 ## What's happening
@@ -17,8 +17,7 @@ pnpm run tsgo   # exit 2 — TS2590 at repro.ts:96
 The error fires at:
 
 ```ts
-useMemo(() => [...], [key1, key2, key3]);
-//                    ^^^^^^^^^^^^^^^^^ three BigUnion values in the deps tuple
+export const arr = [key1, key2, key3]; // three BigUnion values
 ```
 
 ## Versions
