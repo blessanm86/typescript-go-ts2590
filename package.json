@@ -1,0 +1,14 @@
+{
+	"name": "tsgo-ts2590-repro",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"tsc": "tsc --noEmit",
+		"tsgo": "tsgo --noEmit"
+	},
+	"devDependencies": {
+		"@typescript/native-preview": "beta",
+		"next-intl": "^4.9.1",
+		"typescript": "6.0.2"
+	}
+}
