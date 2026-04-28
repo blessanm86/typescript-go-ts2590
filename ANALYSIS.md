@@ -117,9 +117,28 @@ t(m => m.Infrastructure.GoogleCloud.tabs.overview);
 t(m => m.Infrastructure.GoogleCloud.tabs.overview, { count: 3 });
 ```
 
-**Strengths**: same call-site syntax as E (below).
+The call site is **identical** to E. The difference is in the *signature*:
 
-**Friction**: same as E *plus* the perf cost (per the table above). No reason to choose D over E.
+```ts
+// D
+declare function t<R extends string>(selector: (m: Messages) => R): string;
+
+// E
+declare function t(selector: (m: Messages) => string): string;
+```
+
+D has a generic type parameter `R` inferred per call site. At every `t(...)` invocation, TypeScript:
+
+1. Type-checks `m.Foo.Bar` against `Messages` (same as E)
+2. Infers a fresh `R` from the selector's return type
+3. Validates `R extends string`
+4. Substitutes `R` back into the signature
+
+Steps 2-4 are the per-callsite generic instantiation cost. With 100 call sites you pay it 100 times.
+
+**When would D be useful?** When you want `t`'s *return type* to depend on which selector was passed — for example, an API where the result varies by key. That's not the case for translation calls: the runtime always returns the rendered translation as `string`. So `R` is paid for and never used.
+
+**E is the same selector pattern without paying for a generic feature we don't need.** Functionally identical at the call site, dramatically cheaper to type-check (see the perf table above).
 
 ### E — selector-leaf (recommended)
 
