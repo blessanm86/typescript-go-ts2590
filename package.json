@@ -3,8 +3,8 @@
 	"version": "0.0.0",
 	"private": true,
 	"scripts": {
-		"tsc": "tsc --noEmit",
-		"tsgo": "tsgo --noEmit"
+		"tsc": "tsc --noEmit -p reproduction/tsconfig.json",
+		"tsgo": "tsgo --noEmit -p reproduction/tsconfig.json"
 	},
 	"devDependencies": {
 		"@typescript/native-preview": "beta",

@@ -56,7 +56,7 @@ t(m => m.Infrastructure.NoSuch);  // TS2339: Property 'NoSuch' does not exist
 t(m => m.Infrastructure);         // TS2322: type '{...}' is not assignable to 'string'
 ```
 
-Both `tsc` and `tsgo` produce these errors. See `repro-selector-typo-test.ts`.
+Both `tsc` and `tsgo` produce these errors. See [`proposal/repro-selector-typo-test.ts`](./proposal/repro-selector-typo-test.ts).
 
 ## Reproduce
 
@@ -83,7 +83,7 @@ node run-measure.mjs
 
 ## Runtime implementation
 
-See [`selector-api.ts`](./selector-api.ts) for the full reference implementation. The core idea:
+See [`proposal/selector-api.ts`](./proposal/selector-api.ts) for the full reference implementation. The core idea:
 
 1. **`pathFromSelector`** — a Proxy records every property access, converting `m => m.X.Y` into the string `"X.Y"`
 2. **`wrapBaseTranslator`** — wraps next-intl's string-key `t()` into the selector shape, delegating to the original `t(path)` at runtime
@@ -104,15 +104,20 @@ t.hasLeafRaw("some.runtime.key"); // escape hatch for dynamic keys
 
 Same pattern [i18next uses](https://www.locize.com/blog/i18next-typescript-selector-api/). Low overhead, single function.
 
-## Files
+## Structure
 
-| File | Purpose |
-|---|---|
-| `selector-api.ts` | Reference runtime implementation (Proxy wrapper + types) |
-| `repro.ts` | Original minimal TS2590 reproduction |
-| `repro-selector-typo-test.ts` | Type safety verification (expected errors) |
-| `fixture.json` | Anonymized 7,161-key message catalog |
-| `ANALYSIS.md` | Full performance and type-safety comparison |
-| `bench/repro-baseline.ts` | 100 call sites using `MessageKeys<NestedKeyOf<>>` |
-| `bench/repro-selector-leaf.ts` | 100 call sites using `(m: Messages) => string` |
-| `bench/run-measure.mjs` | Measurement runner (3 cold runs per variant per compiler) |
+```
+├── reproduction/          # The problem
+│   ├── repro.ts           # Minimal TS2590 reproduction
+│   └── tsconfig.json
+├── proposal/              # The solution
+│   ├── selector-api.ts    # Reference runtime implementation (Proxy wrapper + types)
+│   └── repro-selector-typo-test.ts  # Type safety verification
+├── bench/                 # Performance measurement
+│   ├── repro-baseline.ts  # 100 call sites using MessageKeys<NestedKeyOf<>>
+│   ├── repro-selector-leaf.ts  # 100 call sites using (m: Messages) => string
+│   └── run-measure.mjs    # Measurement runner
+├── fixture.json           # Anonymized 7,161-key message catalog (shared)
+├── ANALYSIS.md            # Full performance and type-safety comparison
+└── README.md
+```

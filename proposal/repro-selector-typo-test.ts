@@ -1,4 +1,4 @@
-import messages from "./fixture.json";
+import messages from "../fixture.json";
 type Messages = typeof messages;
 declare function t(selector: (m: Messages) => string): string;
 
