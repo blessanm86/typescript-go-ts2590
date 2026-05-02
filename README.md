@@ -1,63 +1,96 @@
-# TS2590 repro — tsgo vs tsc@6.0.2
+# Selector API proposal for `next-intl` — fixing TS2590 at scale
 
-`tsgo --noEmit` reports TS2590 on a bare array literal containing two values of a large string-literal union derived from a JSON message catalog. `tsc@6.0.2` accepts the same input.
+## The problem
 
-## Original repro
+`next-intl`'s `MessageKeys<NestedKeyOf<Messages>>` type constructs a string-literal union of every dot-path in the messages tree. With large catalogs (~7,000+ leaf keys), this union:
 
-```bash
-pnpm install --ignore-workspace
-pnpm run tsc    # exit 0
-pnpm run tsgo   # exit 2 — TS2590 at repro.ts:44
-```
+1. **Triggers TS2590** ("Expression produces a union type that is too complex to represent") when values appear in tuple-literal or array-literal positions — especially under `tsgo`'s deterministic ordering.
+2. **Generates ~730,000 type instantiations** per file with 100 call sites, making type-checking slow.
+3. **Can crash the TypeScript compiler** entirely via `RangeError: Map maximum size exceeded` when the `stringLiteralTypes` internal cache exceeds V8's Map limit (see [next-intl#2296](https://github.com/amannn/next-intl/issues/2296)).
 
-`BigUnion` is `MessageKeys<Messages, NestedKeyOf<Messages>>` — the same type `next-intl` derives from an app's translation JSON. `fixture.json` is an anonymized substitute with identical shape (7,161 leaf keys, max depth 9).
+## Proposed solution: selector-leaf API
 
-The error fires at:
+Inspired by [i18next's selector API](https://www.locize.com/blog/i18next-typescript-selector-api/), replace string-key lookups with selector functions that walk the typed messages tree:
 
 ```ts
-export const arr = [key1, key2]; // two BigUnion values is enough
+// Before — string key checked against a ~7,000-member union
+t("Infrastructure.GoogleCloud.tabs.overview");
+
+// After — selector walks the typed Messages object, no union constructed
+t(m => m.Infrastructure.GoogleCloud.tabs.overview);
 ```
 
-| Compiler | Version | Result |
-|---|---|---|
-| `typescript` | `6.0.2` | clean |
-| `@typescript/native-preview` | `7.0.0-dev.20260421.2` | TS2590 |
+The key insight is the **non-generic signature**:
 
-## Solution analysis
+```ts
+// This is fast — no per-callsite instantiation, no union
+declare function t(selector: (m: Messages) => string): string;
 
-This repo extends the original repro into a controlled testbed comparing five approaches to typing translation keys at scale, on four dimensions:
+// This is NOT — generic R triggers per-callsite instantiation, same cost as baseline
+declare function t<R extends string>(selector: (m: Messages) => R): string;
+```
 
-- **Type-checker performance** — total compile time, instantiations, memory, TS2590 outcome
-- **Usage** — what you write at the call site
-- **Type safety** — what mistakes the compiler catches
-- **Editor support** — autocomplete behavior
+### What you get
 
-See **[ANALYSIS.md](./ANALYSIS.md)** for the full comparison.
+- **No string-literal union ever constructed** — TS2590 cannot fire
+- **Full type safety** — typos, non-string leaves, and intermediate objects are all caught
+- **Hierarchical autocomplete** — IDE shows ~20 top-level keys, then narrows per dot-step, instead of a flat 7,000-item list
+- **No build step** — no codegen, no sync guards
 
-### Headline result
+### Performance (this repo)
 
-| Variant | tsc total | tsgo total | TS2590 | Build step | Editor autocomplete |
-|---|---:|---:|---|---|---|
-| baseline (`MessageKeys<NestedKeyOf<>>`) | 1.24 s | 0.19 s | **fails on tsgo** | no | flat 7k list |
-| `BigUnion = string` | 0.08 s | 0.02 s | n/a | no | none |
-| codegen flat union | 0.12 s | 0.03 s | passes | yes | flat 7k list |
-| selector with `<R extends string>` | 1.16 s | 0.31 s | passes | no | hierarchical |
-| **selector-leaf `(m: Messages) => string`** | **0.10 s** | **0.017 s** | **passes** | **no** | **hierarchical** |
+| Variant | tsc 6.0.2 | tsgo 7.0 | Instantiations | TS2590 |
+|---|---:|---:|---:|---|
+| `MessageKeys<NestedKeyOf<>>` (current) | 1.24 s | 0.19 s | **730,585** | fails on tsgo |
+| **`(m: Messages) => string`** (proposed) | **0.10 s** | **0.017 s** | **15** | n/a |
 
-**Recommendation**: adopt the selector-leaf form `(m: Messages) => string`. Matches the `string` lower bound on perf, fixes TS2590, requires no build step, scales flat as the catalog grows, and gives developers hierarchical incremental autocomplete instead of a flat 7,000-item list.
+See [ANALYSIS.md](./ANALYSIS.md) for the full comparison.
 
-## Reproduce the analysis
+### Type safety verification
+
+```ts
+declare function t(selector: (m: Messages) => string): string;
+
+t(m => m.NoSuchKey);              // TS2339: Property 'NoSuchKey' does not exist
+t(m => m.Infrastructure.NoSuch);  // TS2339: Property 'NoSuch' does not exist
+t(m => m.Infrastructure);         // TS2322: type '{...}' is not assignable to 'string'
+```
+
+Both `tsc` and `tsgo` produce these errors. See `repro-selector-typo-test.ts`.
+
+## Reproduce
 
 ```bash
+git clone https://github.com/blessanm86/typescript-go-ts2590.git
+cd typescript-go-ts2590
 pnpm install --ignore-workspace
 
-node gen-flat-union.mjs       # → keys-flat.gen.ts
-node gen-sample-keys.mjs      # → sample-keys.json
-node gen-scenes.mjs           # → repro-{baseline,string,codegen,selector}.ts
-node gen-selector-simple.mjs  # → repro-selector-simple.ts
-node gen-selector-leaf.mjs    # → repro-selector-leaf.ts
+# Check the original TS2590 repro
+pnpm run tsc    # exit 0 (tsc accepts it)
+pnpm run tsgo   # exit 2 — TS2590 at repro.ts:44
 
+# Compare baseline vs selector-leaf
+pnpm exec tsc  --extendedDiagnostics -p tsconfig.baseline.json
+pnpm exec tsc  --extendedDiagnostics -p tsconfig.selector-leaf.json
+
+# Or run the full measurement suite (3 cold runs per variant per compiler)
+node gen-sample-keys.mjs
+node gen-scenes.mjs
+node gen-selector-leaf.mjs
 node run-measure.mjs
 ```
 
-`run-measure.mjs` runs each variant 3× on each compiler and writes `measurements.json`.
+## Runtime implementation
+
+At runtime, a thin Proxy-based wrapper converts `m => m.X.Y` to the string `"X.Y"` and delegates to `next-intl`'s `t("X.Y")`. This is a well-understood pattern — the same approach used by i18next's selector implementation.
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `repro.ts` | Original minimal TS2590 reproduction |
+| `repro-baseline.ts` | 100 call sites using `MessageKeys<NestedKeyOf<>>` |
+| `repro-selector-leaf.ts` | 100 call sites using `(m: Messages) => string` |
+| `repro-selector-typo-test.ts` | Type safety verification (expected errors) |
+| `fixture.json` | Anonymized 7,161-key message catalog |
+| `ANALYSIS.md` | Full performance and type-safety comparison |
