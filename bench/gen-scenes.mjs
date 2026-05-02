@@ -15,7 +15,7 @@ function callSitesString(getKeyExpr) {
 	return lines.join("\n");
 }
 
-const HEADER = `// SPDX: variant scene for tsgo TS2590 + perf testbed.\nimport messages from "./fixture.json";\ntype Messages = typeof messages;\ntype TranslationValues = Record<string, string | number>;\n`;
+const HEADER = `// SPDX: variant scene for tsgo TS2590 + perf testbed.\nimport messages from "../fixture.json";\ntype Messages = typeof messages;\ntype TranslationValues = Record<string, string | number>;\n`;
 
 // --- baseline (current production approach) ---
 {

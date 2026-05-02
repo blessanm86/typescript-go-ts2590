@@ -3,8 +3,8 @@ import { spawnSync } from "node:child_process";
 
 const variants = ["baseline", "selector-leaf"];
 const compilers = [
-	{ name: "tsc", bin: "node_modules/.bin/tsc", args: ["--extendedDiagnostics", "-p"] },
-	{ name: "tsgo", bin: "node_modules/.bin/tsgo", args: ["--extendedDiagnostics", "-p"] },
+	{ name: "tsc", bin: "../node_modules/.bin/tsc", args: ["--extendedDiagnostics", "-p"] },
+	{ name: "tsgo", bin: "../node_modules/.bin/tsgo", args: ["--extendedDiagnostics", "-p"] },
 ];
 const RUNS = 3;
 

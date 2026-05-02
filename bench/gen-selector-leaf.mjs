@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 const sample = JSON.parse(readFileSync("sample-keys.json", "utf8"));
 const accessors = sample.map(p => "m => m." + p);
 const N = sample.length;
-const code = `import messages from "./fixture.json";
+const code = `import messages from "../fixture.json";
 type Messages = typeof messages;
 type TranslationValues = Record<string, string | number>;
 

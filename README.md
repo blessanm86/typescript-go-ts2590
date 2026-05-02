@@ -70,10 +70,11 @@ pnpm run tsc    # exit 0 (tsc accepts it)
 pnpm run tsgo   # exit 2 — TS2590 at repro.ts:44
 
 # Compare baseline vs selector-leaf
-pnpm exec tsc  --extendedDiagnostics -p tsconfig.baseline.json
-pnpm exec tsc  --extendedDiagnostics -p tsconfig.selector-leaf.json
+pnpm exec tsc  --extendedDiagnostics -p bench/tsconfig.baseline.json
+pnpm exec tsc  --extendedDiagnostics -p bench/tsconfig.selector-leaf.json
 
 # Or run the full measurement suite (3 cold runs per variant per compiler)
+cd bench
 node gen-sample-keys.mjs
 node gen-scenes.mjs
 node gen-selector-leaf.mjs
@@ -89,8 +90,9 @@ At runtime, a thin Proxy-based wrapper converts `m => m.X.Y` to the string `"X.Y
 | File | Purpose |
 |---|---|
 | `repro.ts` | Original minimal TS2590 reproduction |
-| `repro-baseline.ts` | 100 call sites using `MessageKeys<NestedKeyOf<>>` |
-| `repro-selector-leaf.ts` | 100 call sites using `(m: Messages) => string` |
 | `repro-selector-typo-test.ts` | Type safety verification (expected errors) |
 | `fixture.json` | Anonymized 7,161-key message catalog |
 | `ANALYSIS.md` | Full performance and type-safety comparison |
+| `bench/repro-baseline.ts` | 100 call sites using `MessageKeys<NestedKeyOf<>>` |
+| `bench/repro-selector-leaf.ts` | 100 call sites using `(m: Messages) => string` |
+| `bench/run-measure.mjs` | Measurement runner (3 cold runs per variant per compiler) |

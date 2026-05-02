@@ -152,19 +152,18 @@ git clone https://github.com/blessanm86/typescript-go-ts2590.git
 cd typescript-go-ts2590
 pnpm install --ignore-workspace
 
-# Generate the variant scenes
+# Check a single variant by hand:
+pnpm exec tsc  --extendedDiagnostics -p bench/tsconfig.baseline.json
+pnpm exec tsc  --extendedDiagnostics -p bench/tsconfig.selector-leaf.json
+pnpm exec tsgo --extendedDiagnostics -p bench/tsconfig.baseline.json
+pnpm exec tsgo --extendedDiagnostics -p bench/tsconfig.selector-leaf.json
+
+# Or run the full measurement suite (3 cold runs per variant per compiler):
+cd bench
 node gen-sample-keys.mjs      # → sample-keys.json
 node gen-scenes.mjs           # → repro-baseline.ts
 node gen-selector-leaf.mjs    # → repro-selector-leaf.ts
-
-# Run perf measurements (3 cold runs per variant per compiler)
 node run-measure.mjs
-
-# Or check a single variant by hand:
-pnpm exec tsc  --extendedDiagnostics -p tsconfig.baseline.json
-pnpm exec tsc  --extendedDiagnostics -p tsconfig.selector-leaf.json
-pnpm exec tsgo --extendedDiagnostics -p tsconfig.baseline.json
-pnpm exec tsgo --extendedDiagnostics -p tsconfig.selector-leaf.json
 ```
 
-The original minimal repro (`pnpm run tsc` / `pnpm run tsgo` against `repro.ts`) is preserved unchanged.
+The original minimal repro (`pnpm run tsc` / `pnpm run tsgo` against `repro.ts`) is preserved unchanged in the root.

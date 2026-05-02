@@ -1,5 +1,5 @@
 // SPDX: variant scene for tsgo TS2590 + perf testbed.
-import messages from "./fixture.json";
+import messages from "../fixture.json";
 type Messages = typeof messages;
 type TranslationValues = Record<string, string | number>;
 
