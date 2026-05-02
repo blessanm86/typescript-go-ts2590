@@ -48,6 +48,21 @@ t(m => m.Infrastructure);         // TS2322: type '{...}' is not assignable to '
 
 The critical detail is the **non-generic** signature `(m: Messages) => string`. A generic `<R extends string>(m: Messages) => R` triggers per-callsite instantiation and lands at the same cost as baseline. See [ANALYSIS.md](./ANALYSIS.md) for why.
 
+### Go-to-definition tip
+
+The recommended `declare interface IntlMessages extends Messages {}` pattern adds type indirection that breaks Cmd+Click — the IDE shows multiple targets instead of jumping to the JSON property. Flattening to a type alias fixes it:
+
+```ts
+// before (docs recommendation) — Cmd+Click shows multiple targets
+type Messages = typeof import("./messages/en.json");
+declare interface IntlMessages extends Messages {}
+
+// after — Cmd+Click jumps straight to en.json
+type IntlMessages = typeof import("./messages/en.json");
+```
+
+The `interface` exists for declaration merging, but most projects don't augment `IntlMessages` from multiple files.
+
 ### Runtime
 
 A Proxy records property accesses, converting `m => m.X.Y` into `"X.Y"`, then delegates to next-intl's `t(path)`. Full reference implementation in [`proposal/selector-api.ts`](./proposal/selector-api.ts).
