@@ -83,12 +83,32 @@ node run-measure.mjs
 
 ## Runtime implementation
 
-At runtime, a thin Proxy-based wrapper converts `m => m.X.Y` to the string `"X.Y"` and delegates to `next-intl`'s `t("X.Y")`. This is a well-understood pattern — the same approach used by i18next's selector implementation.
+See [`selector-api.ts`](./selector-api.ts) for the full reference implementation. The core idea:
+
+1. **`pathFromSelector`** — a Proxy records every property access, converting `m => m.X.Y` into the string `"X.Y"`
+2. **`wrapBaseTranslator`** — wraps next-intl's string-key `t()` into the selector shape, delegating to the original `t(path)` at runtime
+
+```ts
+import type { BaseTranslator } from "./selector-api";
+import { wrapBaseTranslator } from "./selector-api";
+
+// Wrap any next-intl translator
+const baseT = useTranslations();
+const t = wrapBaseTranslator(baseT as BaseTranslator);
+
+t(m => m.MainNavigation.items.home);
+t.rich(m => m.Some.Key, { strong: (chunks) => <strong>{chunks}</strong> });
+t.hasLeaf(m => m.Some.Key);       // type-safe leaf check
+t.hasLeafRaw("some.runtime.key"); // escape hatch for dynamic keys
+```
+
+Same pattern [i18next uses](https://www.locize.com/blog/i18next-typescript-selector-api/). Low overhead, single function.
 
 ## Files
 
 | File | Purpose |
 |---|---|
+| `selector-api.ts` | Reference runtime implementation (Proxy wrapper + types) |
 | `repro.ts` | Original minimal TS2590 reproduction |
 | `repro-selector-typo-test.ts` | Type safety verification (expected errors) |
 | `fixture.json` | Anonymized 7,161-key message catalog |
