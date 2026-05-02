@@ -29,6 +29,16 @@ t.hasLeaf(m => m.Some.Key);            // type-safe existence check
 t.hasLeafRaw("some.runtime.key");      // escape hatch for dynamic keys
 ```
 
+The `MessageSelector` type also works as a prop type — replacing `label: AsMessageKey` (which puts the full union in the component signature) with a function type that's safe everywhere:
+
+```tsx
+type Props = { label: MessageSelector };
+
+<LabelledItem label={m => m.MainNavigation.items.home} />
+```
+
+See [`proposal/example-usage.tsx`](./proposal/example-usage.tsx) for multi-key arrays, prop patterns, and the autocomplete experience.
+
 Type safety is preserved — typos, non-string leaves, and intermediate objects all error:
 
 ```ts
@@ -72,7 +82,7 @@ pnpm exec tsc --extendedDiagnostics -p bench/tsconfig.selector-leaf.json
 
 ```
 reproduction/    — minimal TS2590 repro (repro.ts)
-proposal/        — selector-api.ts (runtime wrapper) + type safety tests
+proposal/        — selector-api.ts (runtime wrapper) + example usage + type safety tests
 bench/           — performance measurement infrastructure
 fixture.json     — anonymized 7,161-key message catalog (shared)
 ANALYSIS.md      — full comparison
