@@ -46,7 +46,7 @@ t(m => m.NoSuchKey);              // TS2339: Property 'NoSuchKey' does not exist
 t(m => m.Infrastructure);         // TS2322: type '{...}' is not assignable to 'string'
 ```
 
-The critical detail is the **non-generic** signature `(m: Messages) => string`. A generic `<R extends string>(m: Messages) => R` triggers per-callsite instantiation and lands at the same cost as baseline. See [ANALYSIS.md](./ANALYSIS.md) for why.
+The critical detail is the **non-generic** signature `(m: Messages) => string`. A generic `<R extends string>(m: Messages) => R` triggers per-callsite instantiation and lands close to baseline on tsc (0.91 s vs 1.01 s); on tsgo it's still ~19× slower than the non-generic form (0.30 s vs 0.016 s). Adding `GetICUArgs<R>` for full ICU value safety on top of that is a smaller marginal cost (0.30 s → 0.47 s on tsgo). See [ANALYSIS.md](./ANALYSIS.md) for the full decomposition.
 
 ### Go-to-definition tip
 
@@ -69,12 +69,16 @@ A Proxy records property accesses, converting `m => m.X.Y` into `"X.Y"`, then de
 
 ### Performance
 
-Measured against a 7,161-key fixture, 100 call sites per file:
+Measured against a 7,161-key fixture (with ICU placeholders in ~20% of leaves), 100 call sites per file:
 
-| | tsc 6.0.2 | tsgo 7.0 | Instantiations | TS2590 |
+| Variant | tsc 6.0.2 | tsgo 7.0 | Instantiations | TS2590 |
 |---|---:|---:|---:|---|
-| `MessageKeys<NestedKeyOf<>>` | 1.24 s | 0.19 s | **730,585** | fails on tsgo |
-| `(m: Messages) => string` | **0.10 s** | **0.017 s** | **15** | n/a |
+| baseline `MessageKeys<NestedKeyOf<>>` | 1.01 s | 0.18 s | **730,585** | fails on tsgo |
+| **selector-leaf** `(m) => string` | **0.10 s** | **0.016 s** | **15** | n/a |
+| selector-generic `<R extends string>` | 0.91 s | 0.30 s | 316 | n/a |
+| selector-icu `<R> + GetICUArgs<R>` | 1.62 s | 0.47 s | 27,693 | n/a |
+
+The **TS2590 ceiling is gone for every selector form** — even the ICU-typed variant stays well below baseline's instantiation count. The remaining choice is a perf vs values-safety trade. See [ANALYSIS.md](./ANALYSIS.md) for the full breakdown including the cost decomposition (generic instantiation alone is the bigger cost; ICU parsing on top is the cheaper marginal).
 
 Bonus: hierarchical autocomplete (IDE narrows per dot-step) instead of a flat 7,000-item list.
 
@@ -88,9 +92,20 @@ pnpm install --ignore-workspace
 pnpm run tsc    # exit 0
 pnpm run tsgo   # exit 2 — TS2590
 
-# compare baseline vs selector-leaf
+# compare any pair of variants
 pnpm exec tsc --extendedDiagnostics -p bench/tsconfig.baseline.json
 pnpm exec tsc --extendedDiagnostics -p bench/tsconfig.selector-leaf.json
+pnpm exec tsc --extendedDiagnostics -p bench/tsconfig.selector-generic.json
+pnpm exec tsc --extendedDiagnostics -p bench/tsconfig.selector-icu.json
+
+# or run the full suite (3 cold runs × 4 variants × 2 compilers)
+cd bench
+node inject-icu-placeholders.mjs   # one-time fixture mutation
+node gen-scenes.mjs                # → repro-baseline.ts
+node gen-selector-leaf.mjs         # → repro-selector-leaf.ts
+node gen-selector-generic.mjs      # → repro-selector-generic.ts
+node gen-selector-icu.mjs          # → repro-selector-icu.ts
+node run-measure.mjs               # → measurements.json
 ```
 
 ## Structure

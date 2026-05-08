@@ -11,12 +11,16 @@ The numbers are reproducible from this repo: see [Reproduce](#reproduce) at the 
 
 ---
 
-## The two approaches
+## The four approaches
 
 | ID | Name | Definition |
 |---|---|---|
 | **A** | baseline | `BigUnion = MessageKeys<Messages, NestedKeyOf<Messages>>` — current approach in `next-intl` codebases. |
-| **E** | **selector-leaf** | `t(selector: (m: Messages) => string): string`. A selector function walks the typed messages tree; no union is ever constructed. |
+| **E** | **selector-leaf** | `t(selector: (m: Messages) => string): string`. Non-generic; values typed as plain `TranslationValues`. The proposal we recommend. |
+| **G** | selector-generic | `t<R extends string>(selector: (m: Messages) => R, values?: TranslationValues): string`. Preserves the leaf literal `R` but doesn't use it for anything. Decomposition probe — see what generic instantiation alone costs. |
+| **I** | **selector-icu** | `t<R extends string>(selector: (m: Messages) => R, values?: GetICUArgs<R>): string`. Full ICU value safety: values shape is derived from the leaf's ICU placeholders via [`@schummar/icu-type-parser`](https://www.npmjs.com/package/@schummar/icu-type-parser). |
+
+The fixture for variants G and I has ICU placeholders injected into 20% of leaves (a deterministic mix of `{name}`, plurals, selects, two-arg) so `GetICUArgs<R>` does real parser work — not just `EmptyObject` for plain leaves. See `bench/inject-icu-placeholders.mjs`.
 
 ---
 
@@ -28,25 +32,40 @@ Measured on Node 20.x macOS, 3 cold runs per variant per compiler, median report
 
 | Variant | Total | Check | Types | Instantiations | Memory | TS2590 |
 |---|---:|---:|---:|---:|---:|---|
-| A baseline | 1.24 s | 1.18 s | 49,990 | **730,585** | 207 MB | passes (legacy ordering) |
-| **E selector-leaf** | **0.10 s** | **0.04 s** | **4,614** | **15** | **61 MB** | **n/a** |
+| A baseline | 1.01 s | 0.96 s | 50,002 | **730,585** | 215 MB | passes (legacy ordering) |
+| **E selector-leaf** | **0.10 s** | **0.04 s** | **4,626** | **15** | **61 MB** | **n/a** |
+| G selector-generic | 0.91 s | 0.85 s | 4,611 | 316 | 46 MB | n/a |
+| I selector-icu | 1.62 s | 1.56 s | 6,304 | 27,693 | 69 MB | n/a |
 
 ### tsgo 7.0.0-dev.20260421.2
 
 | Variant | Total | Check | Types | Instantiations | Memory | TS2590 |
 |---|---:|---:|---:|---:|---:|---|
-| A baseline | 0.19 s | 0.18 s | 50,253 | **728,557** | 38 MB | **fails** |
-| **E selector-leaf** | **0.017 s** | **0.008 s** | **4,869** | **15** | **17 MB** | **n/a** |
+| A baseline | 0.18 s | 0.18 s | 50,265 | **728,557** | 38 MB | **fails** |
+| **E selector-leaf** | **0.016 s** | **0.007 s** | **4,881** | **15** | **17 MB** | **n/a** |
+| G selector-generic | 0.30 s | 0.29 s | 4,866 | 316 | 17 MB | n/a |
+| I selector-icu | 0.47 s | 0.46 s | 6,639 | 27,732 | 18 MB | n/a |
 
 ### What the numbers say
 
-1. **Baseline does ~730k instantiations** for one file with 100 call sites. The recursive `MessageKeys<NestedKeyOf<>>` is the dominant cost. The selector-leaf variant does 15 instantiations — the same as `BigUnion = string`.
+1. **Baseline does ~730k instantiations** for one file with 100 call sites. The recursive `MessageKeys<NestedKeyOf<>>` is the dominant cost. Selector-leaf does 15 instantiations — the same as `BigUnion = string`.
 
-2. **Selector-leaf matches the `string` lower bound on performance** while retaining full type safety. No string-literal union is ever constructed, so TS2590 cannot fire.
+2. **Selector-leaf matches the `string` lower bound on performance** while retaining full type-correctness (typo detection, non-string leaf rejection). No string-literal union is ever constructed, so TS2590 cannot fire.
 
-3. **12× faster on tsc, 11× faster on tsgo.** Memory drops from 207 MB to 61 MB (tsc) and 38 MB to 17 MB (tsgo).
+3. **TS2590 ceiling is gone for every selector variant** — even the most expensive (selector-icu) does only ~28k instantiations, well below baseline's 730k. The `arr = [sel1, sel2]` tuple position that wedges baseline on tsgo compiles cleanly in all three selector forms. The ceiling problem is solved by the structure (selector vs union), not by the value-typing strategy on top.
 
-> **Note on the generic selector variant:** An earlier iteration used `<R extends string>(selector: (m: Messages) => R)` — the generic form triggers per-callsite instantiation and lands almost on top of baseline (1.16 s vs 1.24 s on tsc). The non-generic `=> string` return constraint is what makes the selector approach fast.
+4. **Generic instantiation, not ICU parsing, is the dominant added cost.** Decomposing the climb from selector-leaf → selector-icu on tsgo:
+
+   - `+ <R extends string>` (no values benefit): **+0.28 s** (0.016 → 0.30 s)
+   - `+ GetICUArgs<R>` (real values safety): **+0.17 s** (0.30 → 0.47 s)
+
+   Once you commit to a generic selector, ICU parsing on top is the cheaper marginal cost. This contradicts the natural intuition that "ICU parsing must be the expensive bit" — it's not.
+
+5. **Implication for the middle-ground design:** selector-generic with permissive values (G) gives no safety win over selector-leaf (E) but pays most of selector-icu's cost (I). It's strictly dominated. No reason to ship it.
+
+6. **The real perf trade is selector-leaf vs selector-icu**, ~25–30× slower on tsgo for full ICU value safety. Whether that's acceptable depends on project size, callsite density, and whether IDE responsiveness or CI time is the binding constraint.
+
+> **Hint:** if you want full ICU value safety, the right next experiment is to measure your actual project's typecheck delta — not extrapolate from this 100-callsite stress file. The per-callsite delta is real but most files have far fewer callsites than 100.
 
 ---
 
