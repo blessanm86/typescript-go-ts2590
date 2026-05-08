@@ -1,7 +1,14 @@
 // Run each variant with each compiler, 3 cold runs, capture extended diagnostics.
 import { spawnSync } from "node:child_process";
 
-const variants = ["baseline", "selector-leaf", "selector-generic", "selector-icu"];
+const variants = [
+	"baseline",
+	"selector-leaf",
+	"selector-generic",
+	"selector-icu",
+	"real-mix-leaf",
+	"real-mix-icu",
+];
 const compilers = [
 	{ name: "tsc", bin: "../node_modules/.bin/tsc", args: ["--extendedDiagnostics", "-p"] },
 	{ name: "tsgo", bin: "../node_modules/.bin/tsgo", args: ["--extendedDiagnostics", "-p"] },

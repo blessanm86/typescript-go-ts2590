@@ -69,6 +69,48 @@ Measured on Node 20.x macOS, 3 cold runs per variant per compiler, median report
 
 ---
 
+## Real-world density check
+
+The 100-callsite stress files above maximize the type-checker's work per file. Real production files have far fewer callsites — 3–10 is typical. So we built a "real-mix" scene that mirrors actual call patterns from three production files in the dash0-ui codebase:
+
+- `gcp-resource-detail-page.tsx` (3 callsites, all plain leaves)
+- `metric-histogram-bucket-boundaries-card.tsx` (3 callsites, including 1 `t.rich` + plural)
+- `logs/no-signals/layout.tsx` (1 callsite, plain leaf)
+
+Total: **7 callsites against the real (un-anonymized) 7,300-leaf en.json.**
+
+### tsc 6.0.2 — real callsite mix
+
+| Variant | Total | Check | Types | Instantiations |
+|---|---:|---:|---:|---:|
+| real-mix-leaf | 0.08 s | 0.03 s | 14,145 | 6 |
+| real-mix-icu | 0.12 s | 0.07 s | 14,584 | 1,782 |
+| **Delta** | **+0.04 s** | **+0.04 s** | +439 | +1,776 |
+
+### tsgo 7.0.0-dev.20260421.2 — real callsite mix
+
+| Variant | Total | Check | Types | Instantiations |
+|---|---:|---:|---:|---:|
+| real-mix-leaf | 0.014 s | 0.006 s | 14,400 | 6 |
+| real-mix-icu | 0.022 s | 0.014 s | 14,919 | 1,821 |
+| **Delta** | **+0.008 s** | **+0.008 s** | +519 | +1,815 |
+
+### What this means at project scale
+
+The 100-callsite stress test showed selector-icu at ~25–30× slower than selector-leaf on tsgo. At real density (7 callsites), the ratio collapses to **~1.6×** (22 ms vs 14 ms total). Per-callsite cost on tsgo is ~1–2 ms.
+
+Extrapolating to a project with N importing files at average density d callsites/file:
+
+```
+project added cost ≈ N × d × ~1.2 ms (tsgo)
+```
+
+For a project with ~1,200 importing files at average ~5 callsites/file: **~7 seconds added** to project-wide tsgo Check time. CI-noticeable, IDE-tolerable. **Not catastrophic.**
+
+The 25–30× headline from the stress test is the worst case (everyone-on-one-file-with-100-callsites). The 1.6× real-density number is what you'd actually feel in normal development.
+
+---
+
 ## Usage from a developer's perspective
 
 ### A — baseline (`MessageKeys<NestedKeyOf<Messages>>`)
